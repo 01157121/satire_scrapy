@@ -9,10 +9,9 @@ from selenium.webdriver.chrome.service import Service
 
 class LineTodayScraper:
     def __init__(self):
-        base_dir = os.path.dirname(os.path.abspath(__file__))  # 獲取腳本所在目錄
-        driver_path = os.path.join(base_dir, "chromedriver.exe")  # 構建相對路徑
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        driver_path = os.path.join(base_dir, "chromedriver.exe")
         
-        # 建立 comments 資料夾
         self.comments_dir = os.path.join(base_dir, "comments")
         if not os.path.exists(self.comments_dir):
             os.makedirs(self.comments_dir)
@@ -21,27 +20,22 @@ class LineTodayScraper:
         self.driver = webdriver.Chrome(service=service)
         
     def start(self):
-        # 開啟 LINE TODAY
         self.driver.get("https://today.line.me/tw/v2/")
         print("已開啟 LINE TODAY")
         
     def get_comments(self, article_url):
-        # 將文章 URL 轉換為留言頁面 URL
         comment_url = article_url.replace('/article/', '/comment/article/')
         self.driver.get(comment_url)
         comments = []
         
         try:
-            # 等待頁面完全載入
             time.sleep(1)
             
-            # 取得文章標題
             try:
                 article_title = self.driver.find_element(By.CSS_SELECTOR, ".articleCard-content .header").text.strip()
             except:
                 article_title = "無法獲取標題"
             
-            # 等待留言數量標題出現並獲取留言數
             try:
                 title_element = WebDriverWait(self.driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "h2.titlebar-text"))
@@ -56,7 +50,6 @@ class LineTodayScraper:
                 print(f"無法獲取留言數量: {str(e)}")
                 return None
 
-            # 捲動頁面以載入更多留言
             last_count = 0
             scroll_attempts = 0
             max_attempts = 10
@@ -72,25 +65,20 @@ class LineTodayScraper:
                     scroll_attempts = 0
                     last_count = current_count
 
-            # 取得所有留言
             comment_elements = self.driver.find_elements(By.CLASS_NAME, "commentItem")
             
             for comment in comment_elements:
                 try:
-                    # 基本留言資料，修改留言內容選擇器以獲取正確文字
                     user = comment.find_element(By.CLASS_NAME, "commentItem-user").text.strip()
                     
-                    # 先找直接子元素中的 span 來獲取留言內容
                     content_spans = comment.find_elements(By.CSS_SELECTOR, ".commentItem-content > span")
                     if content_spans:
                         content = content_spans[0].text.strip()
                     else:
-                        # 如果沒有直接的 span，可能有 HOT 標籤，找最後一個 span
                         content = comment.find_elements(By.CSS_SELECTOR, ".commentItem-content span")[-1].text.strip()
                     
                     time_text = comment.find_element(By.CLASS_NAME, "commentItem-time").text.split("\n")[0].strip()
                     
-                    # 處理按讚數和倒讚數
                     likes_element = comment.find_elements(By.CSS_SELECTOR, ".commentItem-btnUp span")
                     likes = int(likes_element[-1].text or "0") if likes_element else 0
                     
@@ -106,7 +94,6 @@ class LineTodayScraper:
                         "replies": []
                     }
                     
-                    # 檢查回覆按鈕
                     reply_buttons = comment.find_elements(By.CSS_SELECTOR, ".commentItem-reply .commentItem-btn")
                     if reply_buttons:
                         try:
@@ -114,25 +101,20 @@ class LineTodayScraper:
                             comment_data["reply_count"] = reply_count
                             
                             if reply_count > 0:
-                                # 點擊展開回覆
                                 reply_buttons[0].click()
-                                time.sleep(2)  # 等待回覆載入
+                                time.sleep(2)
                                 
-                                # 獲取回覆區塊 - 修改選擇器適應實際HTML結構
                                 try:
-                                    # 嘗試找到回覆容器
                                     reply_items = WebDriverWait(comment, 5).until(
                                         EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".replyItem"))
                                     )
                                     
                                     for reply in reply_items:
                                         try:
-                                            # 處理每一則回覆
                                             reply_user = reply.find_element(By.CLASS_NAME, "replyItem-user").text.strip()
                                             reply_content = reply.find_element(By.CSS_SELECTOR, ".replyItem-content span").text.strip()
                                             reply_time = reply.find_element(By.CLASS_NAME, "replyItem-time").text.split("\n")[0].strip()
-                                            
-                                            # 回覆沒有按讚/倒讚計數，設為0
+
                                             reply_data = {
                                                 "user": reply_user,
                                                 "content": reply_content,
@@ -153,7 +135,6 @@ class LineTodayScraper:
                     continue
 
             if comments:
-                # 加入文章資訊
                 result = {
                     "article_title": article_title,
                     "article_url": article_url,
@@ -184,7 +165,7 @@ class LineTodayScraper:
                 current_url = self.driver.current_url
                 if (current_url != last_url and 
                     current_url.startswith('https://today.line.me/tw/v2/article') and
-                    'comment' not in current_url):  # 確保不是已經在留言頁面
+                    'comment' not in current_url):
                     print(f"檢測到新的LINE TODAY文章: {current_url}")
                     comments = self.get_comments(current_url)
                     if comments:
@@ -199,7 +180,6 @@ class LineTodayScraper:
     
     def save_to_json(self, comments, output_file):
         try:
-            # 將檔案存到 comments 資料夾
             file_path = os.path.join(self.comments_dir, output_file)
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(comments, f, ensure_ascii=False, indent=2)
