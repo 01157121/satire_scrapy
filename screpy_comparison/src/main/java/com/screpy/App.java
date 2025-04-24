@@ -15,6 +15,7 @@ import com.screpy.IronyTypeDialog;
 public class App {
     private static JSONArray articles = null;
     private static String loadedFileName = "";
+    private static String comparingFilePath = null;
 
     public static void main(String[] args) {
         // Create the main frame
@@ -153,6 +154,7 @@ public class App {
                             comparingFileName = comparingFileName + "_comparing.json";
                         }
                         Files.write(Paths.get(comparingFileName), comparingArticles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        comparingFilePath = comparingFileName; // 記住 comparing 的完整路徑
                         // 之後都用 comparingArticles 作為主資料
                         articles = comparingArticles;
                         loadedFileName = new File(comparingFileName).getName();
@@ -329,6 +331,8 @@ public class App {
 
     // --- 靜態 showArticle 方法 ---
     public static void showArticle(JFrame frame, JPanel commentPanelContainer, JPanel commentPanel, JLabel progressLabel, JPanel commentsListPanel, JScrollPane commentsScrollPane, JButton nextArticleBtn, JButton exportBtn, JSONArray articles, int[] articleIdx, int[] cmtIdx) {
+        // 記錄scrollbar位置
+        int scrollValue = commentsScrollPane.getVerticalScrollBar().getValue();
         commentPanelContainer.removeAll();
         if (articles == null || articleIdx[0] >= articles.length()) return;
         JSONObject article = articles.getJSONObject(articleIdx[0]);
@@ -439,7 +443,7 @@ public class App {
             new Color(255,180,255), // 正諷
             new Color(180,255,255), // 第三者諷刺
             new Color(255,220,180), // 比喻Metaphor
-            new Color(230,230,230)  // 不是諷刺（最後一個）
+            new Color(180,180,180)  // 不是諷刺（最後一個）
         };
         String[] satireNames = {
             "A.反話", "B.挪用", "C.誇張/縮小", "D.提問",
@@ -511,7 +515,7 @@ public class App {
                     cmt.put("Satire", sb.toString());
                     // 自動儲存
                     try {
-                        String savePath = "data/" + loadedFileName;
+                        String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
                         Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     } catch (Exception ex) {
                         JOptionPane.showMessageDialog(frame, "自動儲存失敗: " + ex.getMessage());
@@ -558,6 +562,8 @@ public class App {
         
         commentPanelContainer.revalidate();
         commentPanelContainer.repaint();
+        // 恢復scrollbar位置
+        SwingUtilities.invokeLater(() -> commentsScrollPane.getVerticalScrollBar().setValue(scrollValue));
         // 下一篇文章按鈕事件
         nextArticleBtn.setVisible(true);
         for (ActionListener al : nextArticleBtn.getActionListeners()) nextArticleBtn.removeActionListener(al);
@@ -599,7 +605,7 @@ public class App {
             }
             // 存檔
             try {
-                String savePath = "data/" + loadedFileName;
+                String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
                 Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(frame, "自動儲存失敗: " + ex.getMessage());
@@ -629,8 +635,9 @@ public class App {
                     }
                 }
             }
-            // 直接存成 compared
+            // 直接存成 compared，存到 comparingFilePath 的同一個資料夾
             String exportName = loadedFileName;
+            String exportPath = comparingFilePath != null ? comparingFilePath : loadedFileName;
             if (exportName != null && !exportName.isEmpty()) {
                 if (exportName.toLowerCase().endsWith("_comparing.json")) {
                     exportName = exportName.substring(0, exportName.length() - 13) + "_compared.json";
@@ -640,10 +647,18 @@ public class App {
                     exportName = exportName + "_compared.json";
                 }
             }
-            File out = new File("data/" + exportName);
+            // 取 comparingFilePath 的資料夾
+            String exportFullPath = exportPath;
+            if (exportPath != null && exportPath.contains(File.separator)) {
+                String dir = exportPath.substring(0, exportPath.lastIndexOf(File.separator) + 1);
+                exportFullPath = dir + exportName;
+            } else {
+                exportFullPath = exportName;
+            }
+            File out = new File(exportFullPath);
             try {
                 Files.write(out.toPath(), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                JOptionPane.showMessageDialog(frame, "已匯出成 " + exportName + "，請確認 data 資料夾");
+                JOptionPane.showMessageDialog(frame, "已匯出成 " + exportFullPath + "，請確認檔案位置");
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(frame, "匯出失敗: " + ex.getMessage());
             }
