@@ -235,6 +235,9 @@ public class App {
                         fileLabel.setText(loadedFileName);
                         showArticleButton.setEnabled(true);
 
+                        // ★★★ 記下 comparing 的完整路徑 ★★★
+                        comparingFilePath = selectedFile.getAbsolutePath();
+
                         // 尋找 now 標籤所在的留言
                         int foundArticleIdx = 0;
                         int foundCmtIdx = 0;
