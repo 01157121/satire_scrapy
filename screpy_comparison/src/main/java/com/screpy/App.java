@@ -235,7 +235,6 @@ public class App {
                         fileLabel.setText(loadedFileName);
                         showArticleButton.setEnabled(true);
 
-                        // ★★★ 記下 comparing 的完整路徑 ★★★
                         comparingFilePath = selectedFile.getAbsolutePath();
 
                         // 尋找 now 標籤所在的留言
@@ -446,11 +445,12 @@ public class App {
             new Color(255,180,255), // 正諷
             new Color(180,255,255), // 第三者諷刺
             new Color(255,220,180), // 比喻Metaphor
+            new Color(220,200,255), // 模仿
             new Color(180,180,180)  // 不是諷刺（最後一個）
         };
         String[] satireNames = {
             "A.反話", "B.挪用", "C.誇張/縮小", "D.提問",
-            "E.正諷", "F.第三者", "G.比喻", "不是諷刺"
+            "E.正諷", "F.第三者", "G.比喻", "H.模仿", "不是諷刺"
         };
         int satireBtnCount = satireNames.length;
         for (int idx = 0; idx < filtered.size(); idx++) {
