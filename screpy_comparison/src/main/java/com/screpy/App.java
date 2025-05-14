@@ -445,12 +445,13 @@ public class App {
             new Color(255,180,255), // 正諷
             new Color(180,255,255), // 第三者諷刺
             new Color(255,220,180), // 比喻Metaphor
-            new Color(220,200,255), // 模仿
+            new Color(220, 200, 255), // 模仿
+            new Color(255,150,200), // 揶揄
             new Color(180,180,180)  // 不是諷刺（最後一個）
         };
         String[] satireNames = {
             "A.反話", "B.挪用", "C.誇張/縮小", "D.提問",
-            "E.正諷", "F.第三者", "G.比喻", "H.模仿", "不是諷刺"
+            "E.正諷", "F.第三者", "G.比喻", "H.模仿", "I.揶揄", "不是諷刺"
         };
         int satireBtnCount = satireNames.length;
         for (int idx = 0; idx < filtered.size(); idx++) {
@@ -485,9 +486,14 @@ public class App {
             // 解析現有分類
             String satireStr = cmt.has("Satire") ? cmt.get("Satire").toString() : "";
             java.util.Set<Integer> satireSet = new java.util.HashSet<>();
+            boolean isNotSatire = false;
             for (char ch : satireStr.toCharArray()) {
-                int v = ch - '0';
-                if (v > 0 && v <= satireBtnCount) satireSet.add(v);
+                if (ch == 'x') {
+                    isNotSatire = true;
+                } else {
+                    int v = ch - '0';
+                    if (v > 0 && v <= satireBtnCount) satireSet.add(v);
+                }
             }
             for (int i = 0; i < satireBtnCount; i++) {
                 final int satireValue = i + 1;
@@ -495,17 +501,19 @@ public class App {
                 check.setFont(new Font("SansSerif", Font.BOLD, 13));
                 check.setBackground(satireColors[i]);
                 check.setForeground(Color.BLACK);
-                check.setSelected(satireSet.contains(satireValue));
+                if (i == satireBtnCount - 1) {
+                    check.setSelected(isNotSatire);
+                } else {
+                    check.setSelected(satireSet.contains(satireValue));
+                }
                 satireChecks[i] = check;
                 check.addActionListener(ev -> {
                     // 處理不是諷刺（只能單選）
                     if (satireValue == satireBtnCount) {
                         if (check.isSelected()) {
-                            // 只選不是諷刺
                             for (int j = 0; j < satireBtnCount - 1; j++) satireChecks[j].setSelected(false);
                         }
                     } else {
-                        // 其他分類被選時，取消不是諷刺
                         if (check.isSelected()) {
                             satireChecks[satireBtnCount-1].setSelected(false);
                         }
@@ -513,17 +521,21 @@ public class App {
                     // 更新 Satire 欄位
                     StringBuilder sb = new StringBuilder();
                     for (int j = 0; j < satireBtnCount; j++) {
-                        if (satireChecks[j].isSelected()) sb.append(j+1);
+                        if (satireChecks[j].isSelected()) {
+                            if (j == satireBtnCount - 1) {
+                                sb.append("x"); // 不是諷刺用 x
+                            } else {
+                                sb.append(j+1);
+                            }
+                        }
                     }
                     cmt.put("Satire", sb.toString());
-                    // 自動儲存
                     try {
                         String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
                         Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     } catch (Exception ex) {
                         JOptionPane.showMessageDialog(frame, "自動儲存失敗: " + ex.getMessage());
                     }
-                    // 重新刷新顏色
                     showArticle(frame, commentPanelContainer, commentPanel, progressLabel, commentsListPanel, commentsScrollPane, nextArticleBtn, exportBtn, articles, articleIdx, cmtIdx);
                 });
                 btnPanel.add(check);
@@ -533,7 +545,11 @@ public class App {
             // 標記顏色（多選時以條紋顯示多色）
             java.util.List<Color> selectedColors = new java.util.ArrayList<>();
             for (int i = 0; i < satireBtnCount; i++) {
-                if (satireSet.contains(i+1)) selectedColors.add(satireColors[i]);
+                if (i == satireBtnCount - 1) {
+                    if (isNotSatire) selectedColors.add(satireColors[i]);
+                } else {
+                    if (satireSet.contains(i+1)) selectedColors.add(satireColors[i]);
+                }
             }
             JPanel coloredPanel = new JPanel(new BorderLayout()) {
                 @Override
@@ -575,7 +591,8 @@ public class App {
             int firstUnclassifiedIdx = -1;
             for (int i = 0; i < filtered.size(); i++) {
                 JSONObject obj = filtered.get(i);
-                if (obj.optInt("Satire", 0) == 0) {
+                String satireStr = obj.has("Satire") ? obj.get("Satire").toString() : "";
+                if (satireStr == null || satireStr.isEmpty()) {
                     allClassified = false;
                     if (firstUnclassifiedIdx == -1) firstUnclassifiedIdx = i;
                 }
@@ -631,7 +648,13 @@ public class App {
                 JSONArray cmts = art.optJSONArray("comments");
                 if (cmts != null) {
                     for (int j = 0; j < cmts.length(); j++) {
-                        if (cmts.getJSONObject(j).optInt("Satire", 0) == 0) {
+                        if (cmts.getJSONObject(j).has("Satire")) {
+                            String satireStr = cmts.getJSONObject(j).get("Satire").toString();
+                            if (satireStr == null || satireStr.isEmpty()) {
+                                JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
+                                return;
+                            }
+                        } else {
                             JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
                             return;
                         }
