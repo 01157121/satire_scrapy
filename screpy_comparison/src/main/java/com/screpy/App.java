@@ -425,7 +425,8 @@ public class App {
         int total = filtered.size();
         int done = 0;
         for (JSONObject cmt : filtered) {
-            if (cmt.optInt("Satire", 0) > 0) done++;
+            String satireStr = cmt.has("Satire") ? cmt.get("Satire").toString() : "";
+            if (satireStr != null && !satireStr.isEmpty() && !satireStr.equals("0") && !satireStr.equals(0)) done++;
         }
         progressLabel.setText("已標記 " + done + "/" + total);
 
@@ -592,7 +593,7 @@ public class App {
             for (int i = 0; i < filtered.size(); i++) {
                 JSONObject obj = filtered.get(i);
                 String satireStr = obj.has("Satire") ? obj.get("Satire").toString() : "";
-                if (satireStr == null || satireStr.isEmpty()) {
+                if (satireStr == null || satireStr.isEmpty()|| satireStr.equals("0") || satireStr.equals(0)) {
                     allClassified = false;
                     if (firstUnclassifiedIdx == -1) firstUnclassifiedIdx = i;
                 }
