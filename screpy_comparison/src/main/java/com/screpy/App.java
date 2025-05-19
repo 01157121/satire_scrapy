@@ -459,8 +459,28 @@ public class App {
             JSONObject cmt = filtered.get(idx);
             JPanel commentItemPanel = new JPanel(new BorderLayout());
             commentItemPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            // 問號按鈕
+            JButton questionBtn = new JButton("?");
+            questionBtn.setFont(new Font("SansSerif", Font.BOLD, 14));
+            questionBtn.setMargin(new Insets(2, 6, 2, 6));
+            boolean isQuestion = cmt.has("question") && cmt.optBoolean("question", false);
+            questionBtn.setBackground(isQuestion ? Color.YELLOW : Color.LIGHT_GRAY);
+            questionBtn.addActionListener(e -> {
+                boolean nowQ = cmt.has("question") && cmt.optBoolean("question", false);
+                cmt.put("question", !nowQ);
+                questionBtn.setBackground(!nowQ ? Color.YELLOW : Color.LIGHT_GRAY);
+                try {
+                    String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
+                    Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(frame, "自動儲存失敗: " + ex.getMessage());
+                }
+            });
+            JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            leftPanel.add(questionBtn);
             JLabel userLabelCmt = new JLabel(cmt.optString("user", "未知用戶"));
             userLabelCmt.setFont(new Font("SansSerif", Font.BOLD, 14));
+            leftPanel.add(userLabelCmt);
             JTextPane commentContentPane = new JTextPane();
             commentContentPane.setContentType("text/html");
             commentContentPane.setText("<html><body style='font-family:sans-serif;font-size:14px;'>"
@@ -569,7 +589,7 @@ public class App {
                 }
             };
             coloredPanel.setLayout(new BorderLayout());
-            coloredPanel.add(userLabelCmt, BorderLayout.WEST);
+            coloredPanel.add(leftPanel, BorderLayout.WEST);
             if (isLong && commentScrollPane != null) {
                 coloredPanel.add(commentScrollPane, BorderLayout.CENTER);
             } else {
@@ -588,25 +608,6 @@ public class App {
         nextArticleBtn.setVisible(true);
         for (ActionListener al : nextArticleBtn.getActionListeners()) nextArticleBtn.removeActionListener(al);
         nextArticleBtn.addActionListener(ev -> {
-            boolean allClassified = true;
-            int firstUnclassifiedIdx = -1;
-            for (int i = 0; i < filtered.size(); i++) {
-                JSONObject obj = filtered.get(i);
-                String satireStr = obj.has("Satire") ? obj.get("Satire").toString() : "";
-                if (satireStr == null || satireStr.isEmpty()|| satireStr.equals("0") || satireStr.equals(0)) {
-                    allClassified = false;
-                    if (firstUnclassifiedIdx == -1) firstUnclassifiedIdx = i;
-                }
-            }
-            if (!allClassified) {
-                JScrollBar vBar = commentsScrollPane.getVerticalScrollBar();
-                Component c = commentsListPanel.getComponent(firstUnclassifiedIdx);
-                Rectangle rect = c.getBounds();
-                commentsListPanel.scrollRectToVisible(rect);
-                vBar.setValue(rect.y);
-                JOptionPane.showMessageDialog(frame, "請先完成本篇所有留言分類");
-                return;
-            }
             // 將所有文章的 now 標籤移除，並將 now 標籤加到下一篇
             for (int i = 0; i < articles.length(); i++) {
                 JSONObject art = articles.getJSONObject(i);
@@ -644,23 +645,87 @@ public class App {
         exportBtn.setVisible(false);
         for (ActionListener al : exportBtn.getActionListeners()) exportBtn.removeActionListener(al);
         exportBtn.addActionListener(ev -> {
+            final int[] unclassifiedIdx = new int[] { -1, -1 }; // [articleIdx, cmtIdx]
+            outer:
             for (int i = 0; i < articles.length(); i++) {
                 JSONObject art = articles.getJSONObject(i);
                 JSONArray cmts = art.optJSONArray("comments");
                 if (cmts != null) {
                     for (int j = 0; j < cmts.length(); j++) {
-                        if (cmts.getJSONObject(j).has("Satire")) {
-                            String satireStr = cmts.getJSONObject(j).get("Satire").toString();
-                            if (satireStr == null || satireStr.isEmpty()) {
-                                JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
-                                return;
-                            }
-                        } else {
-                            JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
-                            return;
+                        String satireStr = cmts.getJSONObject(j).has("Satire") ? cmts.getJSONObject(j).get("Satire").toString() : "";
+                        if (satireStr == null || satireStr.isEmpty() || satireStr.equals("0") || satireStr.equals(0)) {
+                            unclassifiedIdx[0] = i;
+                            unclassifiedIdx[1] = j;
+                            break outer;
                         }
                     }
                 }
+            }
+            if (unclassifiedIdx[0] != -1 && unclassifiedIdx[1] != -1) {
+                // 跳到未分類的留言
+                articleIdx[0] = unclassifiedIdx[0];
+                cmtIdx[0] = unclassifiedIdx[1];
+                showArticle(frame, commentPanelContainer, commentPanel, progressLabel, commentsListPanel, commentsScrollPane, nextArticleBtn, exportBtn, articles, articleIdx, cmtIdx);
+                // 捲動到該留言
+                SwingUtilities.invokeLater(() -> {
+                    JScrollBar vBar = commentsScrollPane.getVerticalScrollBar();
+                    Component c = commentsListPanel.getComponent(unclassifiedIdx[1]);
+                    Rectangle rect = c.getBounds();
+                    commentsListPanel.scrollRectToVisible(rect);
+                    vBar.setValue(rect.y);
+                });
+                JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
+                return;
+            }
+            // 匯出問號留言專用json
+            try {
+                JSONArray qArticles = new JSONArray();
+                for (int i = 0; i < articles.length(); i++) {
+                    JSONObject art = articles.getJSONObject(i);
+                    JSONArray cmts = art.optJSONArray("comments");
+                    if (cmts != null) {
+                        JSONArray qCmts = new JSONArray();
+                        for (int j = 0; j < cmts.length(); j++) {
+                            JSONObject cmt = cmts.getJSONObject(j);
+                            if (cmt.has("question") && cmt.optBoolean("question", false)) {
+                                JSONObject qCmt = new JSONObject(cmt.toString());
+                                qCmt.put("Satire", 0);
+                                qCmt.remove("question");
+                                qCmts.put(qCmt);
+                            }
+                        }
+                        if (qCmts.length() > 0) {
+                            JSONObject qArt = new JSONObject(art.toString());
+                            qArt.put("comments", qCmts);
+                            qArticles.put(qArt);
+                        }
+                    }
+                }
+                if (qArticles.length() > 0) {
+                    String exportName = loadedFileName;
+                    String exportPath = comparingFilePath != null ? comparingFilePath : loadedFileName;
+                    if (exportName != null && !exportName.isEmpty()) {
+                        if (exportName.toLowerCase().endsWith("_comparing.json")) {
+                            exportName = exportName.substring(0, exportName.length() - 13) + "_q.json";
+                        } else if (exportName.toLowerCase().endsWith(".json")) {
+                            exportName = exportName.substring(0, exportName.length() - 5) + "_q.json";
+                        } else {
+                            exportName = exportName + "_q.json";
+                        }
+                    }
+                    String exportFullPath = exportPath;
+                    if (exportPath != null && exportPath.contains(File.separator)) {
+                        String dir = exportPath.substring(0, exportPath.lastIndexOf(File.separator) + 1);
+                        exportFullPath = dir + exportName;
+                    } else {
+                        exportFullPath = exportName;
+                    }
+                    File out = new File(exportFullPath);
+                    Files.write(out.toPath(), qArticles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    JOptionPane.showMessageDialog(frame, "已匯出問號留言檔 " + exportFullPath + "，請確認檔案位置");
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "匯出問號留言失敗: " + ex.getMessage());
             }
             // 直接存成 compared，存到 comparingFilePath 的同一個資料夾
             String exportName = loadedFileName;
