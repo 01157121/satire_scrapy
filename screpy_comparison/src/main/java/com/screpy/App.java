@@ -458,7 +458,8 @@ public class App {
         for (int idx = 0; idx < filtered.size(); idx++) {
             JSONObject cmt = filtered.get(idx);
             JPanel commentItemPanel = new JPanel(new BorderLayout());
-            commentItemPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            // 將留言框高度縮短一點點（原本預設padding 5,5,5,5，改為 2,5,2,5）
+            commentItemPanel.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
             // 問號按鈕
             JButton questionBtn = new JButton("?");
             questionBtn.setFont(new Font("SansSerif", Font.BOLD, 14));
@@ -492,16 +493,39 @@ public class App {
             // 留言內容區域（可自動換行，超長自帶scrollbar）
             JScrollPane commentScrollPane = null;
             if (isLong) {
-                commentContentPane.setPreferredSize(new Dimension(500, 60));
-                commentContentPane.setMinimumSize(new Dimension(200, 40));
-                commentContentPane.setMaximumSize(new Dimension(800, 120));
+                commentContentPane.setPreferredSize(new Dimension(500, 48)); // 原本 60，縮短一點
+                commentContentPane.setMinimumSize(new Dimension(200, 32));   // 原本 40，縮短一點
+                commentContentPane.setMaximumSize(new Dimension(800, 90));   // 原本 120，縮短一點
                 commentContentPane.setEditable(false);
                 commentScrollPane = new JScrollPane(commentContentPane);
                 commentScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
                 commentScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-                commentScrollPane.setPreferredSize(new Dimension(500, 60));
+                commentScrollPane.setPreferredSize(new Dimension(500, 48)); // 原本 60，縮短一點
+            } else {
+                // 短留言也縮短高度
+                commentContentPane.setPreferredSize(new Dimension(500, 32));
+                commentContentPane.setMinimumSize(new Dimension(200, 24));
+                commentContentPane.setMaximumSize(new Dimension(800, 48));
             }
-            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+            // 揣測按鈕
+            JButton thinkingBtn = new JButton("揣測");
+            thinkingBtn.setFont(new Font("SansSerif", Font.BOLD, 13));
+            thinkingBtn.setMargin(new Insets(2, 8, 2, 8));
+            boolean isThinking = cmt.has("thinking") && cmt.optBoolean("thinking", false);
+            thinkingBtn.setBackground(isThinking ? Color.ORANGE : Color.LIGHT_GRAY);
+            thinkingBtn.addActionListener(e -> {
+                boolean nowT = cmt.has("thinking") && cmt.optBoolean("thinking", false);
+                cmt.put("thinking", !nowT);
+                thinkingBtn.setBackground(!nowT ? Color.ORANGE : Color.LIGHT_GRAY);
+                try {
+                    String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
+                    Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(frame, "自動儲存失敗: " + ex.getMessage());
+                }
+            });
+            btnPanel.add(thinkingBtn);
             // 分類checkbox按鈕
             JCheckBox[] satireChecks = new JCheckBox[satireBtnCount];
             // 解析現有分類
@@ -562,7 +586,7 @@ public class App {
                 btnPanel.add(check);
             }
             // 若留言過長，btnPanel加大左邊間距
-            if (isLong) btnPanel.setBorder(BorderFactory.createEmptyBorder(0, 80, 0, 0));
+            if (isLong) btnPanel.setBorder(BorderFactory.createEmptyBorder(0, 60, 0, 0)); // 原本 80，縮短一點
             // 標記顏色（多選時以條紋顯示多色）
             java.util.List<Color> selectedColors = new java.util.ArrayList<>();
             for (int i = 0; i < satireBtnCount; i++) {
@@ -597,6 +621,8 @@ public class App {
             }
             coloredPanel.add(btnPanel, BorderLayout.EAST);
             coloredPanel.setBorder(commentItemPanel.getBorder());
+            // 讓每則留言 panel 高度再短一點
+            coloredPanel.setPreferredSize(new Dimension(860, isLong ? 54 : 38)); // 原本約 60/40，縮短一點
             commentsListPanel.add(coloredPanel);
         }
         
@@ -677,56 +703,7 @@ public class App {
                 JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
                 return;
             }
-            // 匯出問號留言專用json
-            try {
-                JSONArray qArticles = new JSONArray();
-                for (int i = 0; i < articles.length(); i++) {
-                    JSONObject art = articles.getJSONObject(i);
-                    JSONArray cmts = art.optJSONArray("comments");
-                    if (cmts != null) {
-                        JSONArray qCmts = new JSONArray();
-                        for (int j = 0; j < cmts.length(); j++) {
-                            JSONObject cmt = cmts.getJSONObject(j);
-                            if (cmt.has("question") && cmt.optBoolean("question", false)) {
-                                JSONObject qCmt = new JSONObject(cmt.toString());
-                                qCmt.put("Satire", 0);
-                                qCmt.remove("question");
-                                qCmts.put(qCmt);
-                            }
-                        }
-                        if (qCmts.length() > 0) {
-                            JSONObject qArt = new JSONObject(art.toString());
-                            qArt.put("comments", qCmts);
-                            qArticles.put(qArt);
-                        }
-                    }
-                }
-                if (qArticles.length() > 0) {
-                    String exportName = loadedFileName;
-                    String exportPath = comparingFilePath != null ? comparingFilePath : loadedFileName;
-                    if (exportName != null && !exportName.isEmpty()) {
-                        if (exportName.toLowerCase().endsWith("_comparing.json")) {
-                            exportName = exportName.substring(0, exportName.length() - 13) + "_q.json";
-                        } else if (exportName.toLowerCase().endsWith(".json")) {
-                            exportName = exportName.substring(0, exportName.length() - 5) + "_q.json";
-                        } else {
-                            exportName = exportName + "_q.json";
-                        }
-                    }
-                    String exportFullPath = exportPath;
-                    if (exportPath != null && exportPath.contains(File.separator)) {
-                        String dir = exportPath.substring(0, exportPath.lastIndexOf(File.separator) + 1);
-                        exportFullPath = dir + exportName;
-                    } else {
-                        exportFullPath = exportName;
-                    }
-                    File out = new File(exportFullPath);
-                    Files.write(out.toPath(), qArticles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    JOptionPane.showMessageDialog(frame, "已匯出問號留言檔 " + exportFullPath + "，請確認檔案位置");
-                }
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(frame, "匯出問號留言失敗: " + ex.getMessage());
-            }
+            // 不再匯出只有問號留言的json
             // 直接存成 compared，存到 comparingFilePath 的同一個資料夾
             String exportName = loadedFileName;
             String exportPath = comparingFilePath != null ? comparingFilePath : loadedFileName;
