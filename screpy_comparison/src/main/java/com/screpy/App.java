@@ -421,14 +421,30 @@ public class App {
             return;
         }
         
-        // 計算已標記留言數/總留言數
+        // 計算已標記留言數/總留言數，並統計有效諷刺句數
         int total = filtered.size();
         int done = 0;
+        int satireCount = 0; // 有效諷刺句數
         for (JSONObject cmt : filtered) {
             String satireStr = cmt.has("Satire") ? cmt.get("Satire").toString() : "";
             if (satireStr != null && !satireStr.isEmpty() && !satireStr.equals("0") && !satireStr.equals(0)) done++;
+            // 有效諷刺句：已標記且不含 x（不是諷刺）
+            if (satireStr != null && !satireStr.isEmpty() && !satireStr.equals("0") && !satireStr.equals(0) && !satireStr.contains("x")) {
+                satireCount++;
+            }
         }
-        progressLabel.setText("已標記 " + done + "/" + total);
+        progressLabel.setText("已標記 " + done + "/" + total + "，有效諷刺句：" + satireCount);
+        // 若有效諷刺句達 20，彈窗提醒（每篇文章只提醒一次）
+        if (satireCount == 20 && !article.has("satire20Notified")) {
+            JOptionPane.showMessageDialog(frame, "本篇文章已標記 20 個有效諷刺句子！");
+            article.put("satire20Notified", true);
+            try {
+                String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
+                Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Exception ex) {
+                // 可忽略自動儲存失敗
+            }
+        }
 
         // 設置留言面板位置
         gbc.gridy = 1;
@@ -671,39 +687,6 @@ public class App {
         exportBtn.setVisible(false);
         for (ActionListener al : exportBtn.getActionListeners()) exportBtn.removeActionListener(al);
         exportBtn.addActionListener(ev -> {
-            final int[] unclassifiedIdx = new int[] { -1, -1 }; // [articleIdx, cmtIdx]
-            outer:
-            for (int i = 0; i < articles.length(); i++) {
-                JSONObject art = articles.getJSONObject(i);
-                JSONArray cmts = art.optJSONArray("comments");
-                if (cmts != null) {
-                    for (int j = 0; j < cmts.length(); j++) {
-                        String satireStr = cmts.getJSONObject(j).has("Satire") ? cmts.getJSONObject(j).get("Satire").toString() : "";
-                        if (satireStr == null || satireStr.isEmpty() || satireStr.equals("0") || satireStr.equals(0)) {
-                            unclassifiedIdx[0] = i;
-                            unclassifiedIdx[1] = j;
-                            break outer;
-                        }
-                    }
-                }
-            }
-            if (unclassifiedIdx[0] != -1 && unclassifiedIdx[1] != -1) {
-                // 跳到未分類的留言
-                articleIdx[0] = unclassifiedIdx[0];
-                cmtIdx[0] = unclassifiedIdx[1];
-                showArticle(frame, commentPanelContainer, commentPanel, progressLabel, commentsListPanel, commentsScrollPane, nextArticleBtn, exportBtn, articles, articleIdx, cmtIdx);
-                // 捲動到該留言
-                SwingUtilities.invokeLater(() -> {
-                    JScrollBar vBar = commentsScrollPane.getVerticalScrollBar();
-                    Component c = commentsListPanel.getComponent(unclassifiedIdx[1]);
-                    Rectangle rect = c.getBounds();
-                    commentsListPanel.scrollRectToVisible(rect);
-                    vBar.setValue(rect.y);
-                });
-                JOptionPane.showMessageDialog(frame, "還有留言未分類，請檢查所有文章");
-                return;
-            }
-            // 不再匯出只有問號留言的json
             // 直接存成 compared，存到 comparingFilePath 的同一個資料夾
             String exportName = loadedFileName;
             String exportPath = comparingFilePath != null ? comparingFilePath : loadedFileName;
