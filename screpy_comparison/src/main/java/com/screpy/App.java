@@ -85,12 +85,15 @@ public class App {
         // 將留言區添加到框架中央
         frame.add(commentPanelContainer, BorderLayout.CENTER);
 
-        // 新增底部 panel 放置「下一篇文章」與「匯出」按鈕
+        // 新增底部 panel 放置「下一篇文章」、「一次skip」與「匯出」按鈕
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         frame.add(bottomPanel, BorderLayout.SOUTH);
         JButton nextArticleBtn = new JButton("下一篇文章");
         nextArticleBtn.setFont(new Font("SansSerif", Font.BOLD, 16));
         nextArticleBtn.setVisible(true);
+        JButton skipBtn = new JButton("一次skip");
+        skipBtn.setFont(new Font("SansSerif", Font.BOLD, 16));
+        skipBtn.setVisible(true);
         JButton exportBtn = new JButton("匯出JSON");
         exportBtn.setFont(new Font("SansSerif", Font.BOLD, 16));
         exportBtn.setVisible(false);
@@ -99,6 +102,7 @@ public class App {
         bottomPanel.add(prevArticleBtn);
         bottomPanel.add(exportBtn);
         bottomPanel.add(nextArticleBtn);
+        bottomPanel.add(skipBtn);
 
 
 
@@ -683,6 +687,7 @@ public class App {
                 exportBtn.setVisible(true);
             }
         });
+
         // 匯出按鈕事件
         exportBtn.setVisible(false);
         for (ActionListener al : exportBtn.getActionListeners()) exportBtn.removeActionListener(al);
@@ -715,5 +720,57 @@ public class App {
                 JOptionPane.showMessageDialog(frame, "匯出失敗: " + ex.getMessage());
             }
         });
+
+        // 一次skip按鈕事件（確保skipBtn存在於main方法並傳入）
+        JButton skipBtn = null;
+        // 嘗試從bottomPanel取得skipBtn
+        Container parent = nextArticleBtn.getParent();
+        if (parent instanceof JPanel) {
+            for (Component comp : ((JPanel)parent).getComponents()) {
+                if (comp instanceof JButton && ((JButton)comp).getText().contains("skip")) {
+                    skipBtn = (JButton)comp;
+                    break;
+                }
+            }
+        }
+        if (skipBtn != null) {
+            skipBtn.setVisible(true);
+            for (ActionListener al : skipBtn.getActionListeners()) skipBtn.removeActionListener(al);
+            skipBtn.addActionListener(ev -> {
+                JSONObject articleObj = articles.getJSONObject(articleIdx[0]);
+                JSONArray commentsArr = articleObj.optJSONArray("comments");
+                if (commentsArr != null) {
+                    // 找到最後一個已標記的留言index
+                    int lastMarkedIdx = -1;
+                    for (int i = commentsArr.length() - 1; i >= 0; i--) {
+                        JSONObject cmt = commentsArr.getJSONObject(i);
+                        String satireStr = cmt.has("Satire") ? cmt.get("Satire").toString() : "";
+                        if (satireStr != null && !satireStr.isEmpty() && !satireStr.equals("0") && !satireStr.equals(0)) {
+                            lastMarkedIdx = i;
+                            break;
+                        }
+                    }
+                    // 將最後一個已標記留言之前的未標記留言設為不是諷刺
+                    if (lastMarkedIdx > 0) {
+                        for (int i = 0; i < lastMarkedIdx; i++) {
+                            JSONObject cmt = commentsArr.getJSONObject(i);
+                            String satireStr = cmt.has("Satire") ? cmt.get("Satire").toString() : "";
+                            if (satireStr == null || satireStr.isEmpty() || satireStr.equals("0") || satireStr.equals(0)) {
+                                cmt.put("Satire", "x");
+                            }
+                        }
+                    }
+                    // 自動儲存
+                    try {
+                        String savePath = comparingFilePath != null ? comparingFilePath : loadedFileName;
+                        Files.write(Paths.get(savePath), articles.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(frame, "自動儲存失敗: " + ex.getMessage());
+                    }
+                    // 重新顯示
+                    showArticle(frame, commentPanelContainer, commentPanel, progressLabel, commentsListPanel, commentsScrollPane, nextArticleBtn, exportBtn, articles, articleIdx, cmtIdx);
+                }
+            });
+        }
     }
 }
