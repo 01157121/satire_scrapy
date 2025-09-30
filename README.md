@@ -8,7 +8,8 @@
 
 ## 介面示意
 
-![資料集標記系統](fig/scrapy.png)
+<img width="1202" height="824" alt="image" src="https://github.com/user-attachments/assets/d3a37b29-3174-49b6-9321-01e49d7c5197" />
+
 
 如上圖，系統介面大致分為三個區域：
 - 上方（藍色區）：呈現文章標題與文章內容。點擊「顯示文章」可於獨立視窗查看全文，方便反覆比對留言與文章。
